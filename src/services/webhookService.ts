@@ -1,14 +1,23 @@
 import axios from "axios";
 import { DeliveryAttempt } from "../types/eventTypes";
-import { getCurrentTimestamp } from "../utils/helpers";
+import { generateSignature, getCurrentTimestamp } from "../utils/helpers";
 
 class WebhookService {
   async send(
     destination: string,
     payload: Record<string, unknown>,
   ): Promise<DeliveryAttempt> {
+    const signature = generateSignature(
+      payload,
+      process.env.WEBHOOK_SECRET ?? "",
+    );
+
     try {
-      const response = await axios.post(destination, payload);
+      const response = await axios.post(destination, payload, {
+        headers: {
+          "X-Webhook-Signature": signature,
+        },
+      });
 
       return {
         timestamp: getCurrentTimestamp(),

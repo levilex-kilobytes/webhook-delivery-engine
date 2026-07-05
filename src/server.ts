@@ -1,10 +1,10 @@
-import dotenv from "dotenv";
 import app from "./app";
-
-dotenv.config();
+import workerService from "./services/workerService";
 
 const PORT = process.env.PORT || 3000;
 
+workerService.start();
+
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

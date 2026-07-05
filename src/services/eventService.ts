@@ -1,38 +1,21 @@
-import eventRepository from "../repositories/eventRepository";
-import { CreateEventRequest, Event } from "../types/eventTypes";
+import deliveryRepository from "../repositories/deliveryRepository";
+import { DeliveryJob } from "../types/eventTypes";
 import { generateId } from "../utils/helpers";
-import webhookService from "./webhookService";
 
 class EventService {
-  async createEvent(data: CreateEventRequest): Promise<Event> {
-    const event: Event = {
+  create(destination: string, payload: Record<string, unknown>): DeliveryJob {
+    const job: DeliveryJob = {
       id: generateId(),
-      destination: data.destination,
-      payload: data.payload,
-      delivered: false,
-      attempts: [],
+      destination,
+      payload,
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      status: "pending",
     };
 
-    eventRepository.create(event);
+    deliveryRepository.save(job);
 
-    const attempt = await webhookService.send(event.destination, event.payload);
-
-    eventRepository.addAttempt(event.id, attempt);
-
-    if (attempt.success) {
-      event.delivered = true;
-      eventRepository.update(event);
-    }
-
-    return event;
-  }
-
-  getAllEvents(): Event[] {
-    return eventRepository.getAll();
-  }
-
-  getEventById(id: string): Event | undefined {
-    return eventRepository.findById(id);
+    return job;
   }
 }
 

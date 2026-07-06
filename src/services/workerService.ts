@@ -1,4 +1,5 @@
 import deliveryRepository from "../repositories/deliveryRepository";
+import deadLetterRepository from "../repositories/deadLetterRepository";
 import webhookService from "./webhookService";
 
 const retryDelays = [
@@ -20,19 +21,36 @@ class WorkerService {
       const result = await webhookService.send(job.destination, job.payload);
 
       if (result.success) {
+        job.attemptHistory.push({
+          attempt: job.attempts + 1,
+          timestamp: new Date(),
+          success: true,
+          message: "Delivery successful",
+        });
+
         job.status = "completed";
       } else {
         job.attempts++;
 
+        job.attemptHistory.push({
+          attempt: job.attempts,
+          timestamp: new Date(),
+          success: false,
+          message: "Delivery failed",
+        });
+
         if (job.attempts >= 5) {
           job.status = "failed";
+
+          deliveryRepository.update(job);
+          deadLetterRepository.save(job);
         } else {
           job.status = "pending";
           job.nextAttemptAt = new Date(Date.now() + retryDelays[job.attempts]);
+
+          deliveryRepository.update(job);
         }
       }
-
-      deliveryRepository.update(job);
     }
   }
 

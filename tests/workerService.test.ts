@@ -12,7 +12,8 @@ describe("WorkerService", () => {
     vi.spyOn(webhookService, "send").mockResolvedValue({
       success: true,
       timestamp: new Date(),
-      status: 200,
+      attempt: 1,
+      message: "OK",
     });
 
     const job = {
@@ -20,6 +21,7 @@ describe("WorkerService", () => {
       destination: "https://example.com",
       payload: {},
       attempts: 0,
+      attemptHistory: [],
       nextAttemptAt: new Date(),
       status: "pending" as const,
     };
@@ -28,14 +30,17 @@ describe("WorkerService", () => {
 
     await workerService.process();
 
-    expect(deliveryRepository.getAll().find((job) => job.id === "1")?.status).toBe("completed");
+    expect(
+      deliveryRepository.getAll().find((job) => job.id === "1")?.status,
+    ).toBe("completed");
   });
 
   it("should retry a failed delivery", async () => {
     vi.spyOn(webhookService, "send").mockResolvedValue({
       success: false,
       timestamp: new Date(),
-      status: 500,
+      attempt: 1,
+      message: "Internal Server Error",
     });
 
     const job = {
@@ -43,6 +48,7 @@ describe("WorkerService", () => {
       destination: "https://example.com",
       payload: {},
       attempts: 0,
+      attemptHistory: [],
       nextAttemptAt: new Date(),
       status: "pending" as const,
     };
@@ -51,14 +57,17 @@ describe("WorkerService", () => {
 
     await workerService.process();
 
-    expect(deliveryRepository.getAll().find((job) => job.id === "1")?.attempts).toBe(1);
+    expect(
+      deliveryRepository.getAll().find((job) => job.id === "1")?.attempts,
+    ).toBe(1);
   });
 
   it("should fail after five attempts", async () => {
     vi.spyOn(webhookService, "send").mockResolvedValue({
       success: false,
       timestamp: new Date(),
-      status: 500,
+      attempt: 5,
+      message: "Internal Server Error",
     });
 
     const job = {
@@ -66,6 +75,7 @@ describe("WorkerService", () => {
       destination: "https://example.com",
       payload: {},
       attempts: 4,
+      attemptHistory: [],
       nextAttemptAt: new Date(),
       status: "pending" as const,
     };
@@ -74,6 +84,8 @@ describe("WorkerService", () => {
 
     await workerService.process();
 
-    expect(deliveryRepository.getAll().find((job) => job.id === "1")?.status).toBe("failed");
+    expect(
+      deliveryRepository.getAll().find((job) => job.id === "1")?.status,
+    ).toBe("failed");
   });
 });

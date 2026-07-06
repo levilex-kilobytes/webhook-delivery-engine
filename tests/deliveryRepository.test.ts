@@ -14,6 +14,7 @@ describe("DeliveryRepository", () => {
       attempts: 0,
       nextAttemptAt: new Date(),
       status: "pending" as const,
+      attemptHistory: [],
     };
 
     deliveryRepository.save(job);
@@ -29,6 +30,7 @@ describe("DeliveryRepository", () => {
       attempts: 0,
       nextAttemptAt: new Date(),
       status: "pending" as const,
+      attemptHistory: [],
     };
 
     deliveryRepository.save(job);
@@ -44,6 +46,7 @@ describe("DeliveryRepository", () => {
       attempts: 0,
       nextAttemptAt: new Date(),
       status: "pending" as const,
+      attemptHistory: [],
     };
 
     deliveryRepository.save(job);
@@ -65,6 +68,7 @@ describe("DeliveryRepository", () => {
       attempts: 0,
       nextAttemptAt: new Date(),
       status: "pending" as const,
+      attemptHistory: [],
     });
 
     deliveryRepository.save({
@@ -74,6 +78,7 @@ describe("DeliveryRepository", () => {
       attempts: 0,
       nextAttemptAt: new Date(),
       status: "completed" as const,
+      attemptHistory: [],
     });
 
     expect(deliveryRepository.findPending()).toHaveLength(1);

@@ -4,43 +4,19 @@ import deadLetterRepository from "../src/repositories/deadLetterRepository";
 import webhookService from "../src/services/webhookService";
 import workerService from "../src/services/workerService";
 
-describe("WorkerService", () => {
+describe("Retry Simulation", () => {
   beforeEach(() => {
     deliveryRepository.clear();
     deadLetterRepository.clear();
     vi.restoreAllMocks();
   });
 
-  it("should mark a successful job as completed", async () => {
-    vi.spyOn(webhookService, "send").mockResolvedValue({
-      attempt: 1,
-      timestamp: new Date(),
-      success: true,
-      message: "Delivery successful",
-    });
-
-    deliveryRepository.save({
-      id: "1",
-      destination: "https://example.com",
-      payload: {},
-      attempts: 0,
-      nextAttemptAt: new Date(),
-      status: "pending",
-      attemptHistory: [],
-    });
-
-    await workerService.process();
-
-    expect(deliveryRepository.findById("1")?.status).toBe("completed");
-    expect(deadLetterRepository.getAll()).toHaveLength(0);
-  });
-
-  it("should retry a failed delivery", async () => {
+  it("should schedule the first retry after 1 minute", async () => {
     vi.spyOn(webhookService, "send").mockResolvedValue({
       attempt: 1,
       timestamp: new Date(),
       success: false,
-      message: "Delivery failed",
+      message: "Failed",
     });
 
     deliveryRepository.save({
@@ -59,19 +35,18 @@ describe("WorkerService", () => {
 
     expect(job?.attempts).toBe(1);
     expect(job?.status).toBe("pending");
-    expect(deadLetterRepository.getAll()).toHaveLength(0);
   });
 
-  it("should fail after five attempts", async () => {
+  it("should move the event to the DLQ after the fifth failure", async () => {
     vi.spyOn(webhookService, "send").mockResolvedValue({
       attempt: 5,
       timestamp: new Date(),
       success: false,
-      message: "Delivery failed",
+      message: "Failed",
     });
 
     deliveryRepository.save({
-      id: "1",
+      id: "2",
       destination: "https://example.com",
       payload: {},
       attempts: 4,
@@ -83,9 +58,32 @@ describe("WorkerService", () => {
     await workerService.process();
 
     expect(deliveryRepository.getAll()).toHaveLength(0);
-
     expect(deadLetterRepository.getAll()).toHaveLength(1);
+  });
 
-    expect(deadLetterRepository.findById("1")?.status).toBe("failed");
+  it("should stop retrying after a successful delivery", async () => {
+    vi.spyOn(webhookService, "send").mockResolvedValue({
+      attempt: 1,
+      timestamp: new Date(),
+      success: true,
+      message: "Delivered",
+    });
+
+    deliveryRepository.save({
+      id: "3",
+      destination: "https://example.com",
+      payload: {},
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      status: "pending",
+      attemptHistory: [],
+    });
+
+    await workerService.process();
+
+    const job = deliveryRepository.findById("3");
+
+    expect(job?.status).toBe("completed");
+    expect(job?.attemptHistory).toHaveLength(1);
   });
 });

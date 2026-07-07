@@ -2,7 +2,7 @@ import deliveryRepository from "../repositories/deliveryRepository";
 import deadLetterRepository from "../repositories/deadLetterRepository";
 import webhookService from "./webhookService";
 
-const retryDelays = [
+const retrySchedule = [
   0,
   60 * 1000,
   5 * 60 * 1000,
@@ -18,39 +18,50 @@ class WorkerService {
       job.status = "processing";
       deliveryRepository.update(job);
 
-      const result = await webhookService.send(job.destination, job.payload);
+      const result = await webhookService.send(
+        job.id,
+        job.destination,
+        job.payload,
+      );
 
       if (result.success) {
-        job.attemptHistory.push({
-          attempt: job.attempts + 1,
-          timestamp: new Date(),
-          success: true,
-          message: "Delivery successful",
-        });
-
-        job.status = "completed";
-      } else {
         job.attempts++;
 
         job.attemptHistory.push({
           attempt: job.attempts,
-          timestamp: new Date(),
-          success: false,
-          message: "Delivery failed",
+          timestamp: result.timestamp,
+          success: true,
+          message: result.message,
         });
 
-        if (job.attempts >= 5) {
-          job.status = "failed";
-
-          deliveryRepository.update(job);
-          deadLetterRepository.save(job);
-        } else {
-          job.status = "pending";
-          job.nextAttemptAt = new Date(Date.now() + retryDelays[job.attempts]);
-
-          deliveryRepository.update(job);
-        }
+        job.status = "completed";
+        deliveryRepository.update(job);
+        continue;
       }
+
+      job.attempts++;
+
+      job.attemptHistory.push({
+        attempt: job.attempts,
+        timestamp: result.timestamp,
+        success: false,
+        message: result.message,
+      });
+
+      if (job.attempts >= 5) {
+        job.status = "failed";
+
+        deliveryRepository.remove(job.id);
+        deadLetterRepository.save(job);
+
+        continue;
+      }
+
+      job.status = "pending";
+
+      job.nextAttemptAt = new Date(Date.now() + retrySchedule[job.attempts]);
+
+      deliveryRepository.update(job);
     }
   }
 

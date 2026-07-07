@@ -19,6 +19,18 @@ class DeliveryRepository {
     }
   }
 
+  remove(id: string): void {
+    this.jobs = this.jobs.filter((job) => job.id !== id);
+  }
+
+  findById(id: string): DeliveryJob | undefined {
+    return this.jobs.find((job) => job.id === id);
+  }
+
+  clear(): void {
+    this.jobs = [];
+  }
+
   getAll(): DeliveryJob[] {
     return this.jobs;
   }

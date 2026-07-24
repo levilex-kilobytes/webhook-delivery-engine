@@ -1,38 +1,41 @@
-import eventRepository from "../repositories/eventRepository";
-import { CreateEventRequest, Event } from "../types/eventTypes";
+import deliveryRepository from "../repositories/deliveryRepository";
+import deadLetterRepository from "../repositories/deadLetterRepository";
+import { DeliveryJob } from "../types/eventTypes";
 import { generateId } from "../utils/helpers";
-import webhookService from "./webhookService";
 
 class EventService {
-  async createEvent(data: CreateEventRequest): Promise<Event> {
-    const event: Event = {
+  create(destination: string, payload: Record<string, unknown>): DeliveryJob {
+    const job: DeliveryJob = {
       id: generateId(),
-      destination: data.destination,
-      payload: data.payload,
-      delivered: false,
-      attempts: [],
+      destination,
+      payload,
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      status: "pending",
+      attemptHistory: [],
     };
 
-    eventRepository.create(event);
+    deliveryRepository.save(job);
 
-    const attempt = await webhookService.send(event.destination, event.payload);
+    return job;
+  }
 
-    eventRepository.addAttempt(event.id, attempt);
+  replay(id: string): DeliveryJob | undefined {
+    const job = deadLetterRepository.findById(id);
 
-    if (attempt.success) {
-      event.delivered = true;
-      eventRepository.update(event);
+    if (!job) {
+      return undefined;
     }
 
-    return event;
-  }
+    deadLetterRepository.remove(id);
 
-  getAllEvents(): Event[] {
-    return eventRepository.getAll();
-  }
+    job.status = "pending";
+    job.attempts = 0;
+    job.nextAttemptAt = new Date();
 
-  getEventById(id: string): Event | undefined {
-    return eventRepository.findById(id);
+    deliveryRepository.save(job);
+
+    return job;
   }
 }
 
